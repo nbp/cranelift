@@ -9,10 +9,12 @@
 
 use crate::fx::FxHashMap;
 use crate::hash_map::{Entry, Iter};
+use crate::ir::{Ebb, StackSlot, Value, ValueLoc, ValueLocations};
 use crate::ir::{InstructionData, Opcode};
-use crate::ir::{StackSlot, Value, ValueLoc, ValueLocations};
 use crate::isa::{RegInfo, RegUnit};
 use core::fmt;
+use cranelift_entity::SecondaryMap;
+use std::iter::FromIterator;
 
 /// A diversion of a value from its original location to a new register or stack location.
 ///
@@ -38,9 +40,13 @@ impl Diversion {
 }
 
 /// Keep track of diversions in an EBB.
+#[derive(Clone)]
 pub struct RegDiversions {
     current: FxHashMap<Value, Diversion>,
 }
+
+/// Keep track of diversions at the entry of EBB.
+pub type EntryRegDiversions = SecondaryMap<Ebb, RegDiversions>;
 
 impl RegDiversions {
     /// Create a new empty diversion tracker.
@@ -166,6 +172,26 @@ impl RegDiversions {
     /// Return an object that can display the diversions.
     pub fn display<'a, R: Into<Option<&'a RegInfo>>>(&'a self, regs: R) -> DisplayDiversions<'a> {
         DisplayDiversions(self, regs.into())
+    }
+}
+
+impl<'a> Extend<(&'a Value, &'a Diversion)> for RegDiversions {
+    fn extend<T: IntoIterator<Item = (&'a Value, &'a Diversion)>>(&mut self, iter: T) {
+        self.current.extend(iter)
+    }
+}
+
+impl<'a> FromIterator<(&'a Value, &'a Diversion)> for RegDiversions {
+    fn from_iter<T: IntoIterator<Item = (&'a Value, &'a Diversion)>>(iter: T) -> Self {
+        let mut res = Self::new();
+        res.extend(iter);
+        res
+    }
+}
+
+impl Default for RegDiversions {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
