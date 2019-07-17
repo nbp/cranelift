@@ -1,8 +1,8 @@
 //! Verify value locations.
 
-use crate::dominator_tree::DominatorTree;
 use crate::ir;
 use crate::isa;
+use crate::flowgraph::ControlFlowGraph;
 use crate::regalloc::liveness::Liveness;
 use crate::regalloc::{EntryRegDiversions, RegDiversions};
 use crate::timing;
@@ -22,7 +22,7 @@ use crate::verifier::{VerifierErrors, VerifierStepResult};
 pub fn verify_locations(
     isa: &dyn isa::TargetIsa,
     func: &ir::Function,
-    domtree: &DominatorTree,
+    cfg: &ControlFlowGraph,
     liveness: Option<&Liveness>,
     errors: &mut VerifierErrors,
 ) -> VerifierStepResult<()> {
@@ -32,7 +32,7 @@ pub fn verify_locations(
         func,
         reginfo: isa.register_info(),
         encinfo: isa.encoding_info(),
-        domtree,
+        cfg,
         liveness,
     };
     verifier.check_constraints(errors)?;
@@ -44,7 +44,7 @@ struct LocationVerifier<'a> {
     func: &'a ir::Function,
     reginfo: isa::RegInfo,
     encinfo: isa::EncInfo,
-    domtree: &'a DominatorTree,
+    cfg: &'a ControlFlowGraph,
     liveness: Option<&'a Liveness>,
 }
 
@@ -339,7 +339,7 @@ impl<'a> LocationVerifier<'a> {
                 dfg.display_inst(inst, self.isa)
             ),
             SingleDest(ebb, _) => {
-                let unique_predecessor = self.domtree.idom(ebb) == Some(inst);
+                let unique_predecessor = self.cfg.pred_iter(ebb).count() == 1;
                 if is_after_branch && unique_predecessor {
                     entry_divert[ebb] = divert.iter().collect();
                 } else {

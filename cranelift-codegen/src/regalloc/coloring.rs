@@ -44,6 +44,7 @@
 
 use crate::cursor::{Cursor, EncCursor};
 use crate::dominator_tree::DominatorTree;
+use crate::flowgraph::ControlFlowGraph;
 use crate::ir::{AbiParam, ArgumentLoc, InstBuilder, ValueDef};
 use crate::ir::{Ebb, Function, Inst, Layout, SigRef, Value, ValueLoc};
 use crate::isa::{regs_overlap, RegClass, RegInfo, RegUnit};
@@ -87,6 +88,7 @@ struct Context<'a> {
     encinfo: EncInfo,
 
     // References to contextual data structures we need.
+    cfg: &'a ControlFlowGraph,
     domtree: &'a DominatorTree,
     liveness: &'a mut Liveness,
 
@@ -125,6 +127,7 @@ impl Coloring {
         &mut self,
         isa: &dyn TargetIsa,
         func: &mut Function,
+        cfg: &ControlFlowGraph,
         domtree: &DominatorTree,
         liveness: &mut Liveness,
         tracker: &mut LiveValueTracker,
@@ -136,6 +139,7 @@ impl Coloring {
             cur: EncCursor::new(func, isa),
             reginfo: isa.register_info(),
             encinfo: isa.encoding_info(),
+            cfg,
             domtree,
             liveness,
             divert: &mut self.divert,
@@ -214,7 +218,7 @@ impl<'a> Context<'a> {
                     // We have a single branch with a single target, and an EBB
                     // which immediate dominator is the branch instruction. Thus
                     // the target EBB has a single predecessor.
-                    if self.domtree.idom(target) == Some(branch) {
+                    if self.cfg.pred_iter(target).count() == 1 {
                         // TODO: Assert that the entry is only set once.
                         // Transfer the diversion to the next EBB.
                         self.entry_divert[target] = self.divert.iter().collect();
