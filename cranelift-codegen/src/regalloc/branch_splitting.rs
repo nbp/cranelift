@@ -219,8 +219,6 @@ impl<'a> Context<'a> {
         // Or, if the target is has more than one block reaching it. If a block
         // has more than one predecessor, then the immediate dominator would not
         // be the branch instruction which is jumping into this block.
-        // TODO: This condition does not work with branches which have multiple
-        // targets.
         if self.domtree.idom(target) != Some(branch) {
             return true;
         };
