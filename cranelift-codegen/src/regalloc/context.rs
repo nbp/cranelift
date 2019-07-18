@@ -193,8 +193,14 @@ impl Context {
         }
 
         // Pass: Coloring.
-        self.coloring
-            .run(isa, func, cfg, domtree, &mut self.liveness, &mut self.tracker);
+        self.coloring.run(
+            isa,
+            func,
+            cfg,
+            domtree,
+            &mut self.liveness,
+            &mut self.tracker,
+        );
 
         if isa.flags().enable_verifier() {
             let ok = verify_context(func, cfg, domtree, isa, &mut errors).is_ok()
