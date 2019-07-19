@@ -210,7 +210,7 @@ impl<'a> Context<'a> {
                     use crate::ir::instructions::BranchInfo::*;
                     let target = match self.cur.func.dfg.analyze_branch(branch) {
                         NotABranch | Table(_, _) => {
-                            panic!("unexpected table jump after a conditional branch")
+                            panic!("unexpected {} after a conditional branch", self.cur.display_inst(branch))
                         }
                         SingleDest(ebb, _) => ebb,
                     };

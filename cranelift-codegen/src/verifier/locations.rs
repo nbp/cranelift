@@ -1,11 +1,13 @@
 //! Verify value locations.
 
+use crate::dominator_tree::DominatorTree;
+use crate::flowgraph::ControlFlowGraph;
 use crate::ir;
 use crate::isa;
-use crate::flowgraph::ControlFlowGraph;
 use crate::regalloc::liveness::Liveness;
 use crate::regalloc::{EntryRegDiversions, RegDiversions};
 use crate::timing;
+use crate::topo_order::TopoOrder;
 use crate::verifier::{VerifierErrors, VerifierStepResult};
 
 /// Verify value locations for `func`.
@@ -23,6 +25,7 @@ pub fn verify_locations(
     isa: &dyn isa::TargetIsa,
     func: &ir::Function,
     cfg: &ControlFlowGraph,
+    domtree: &DominatorTree,
     liveness: Option<&Liveness>,
     errors: &mut VerifierErrors,
 ) -> VerifierStepResult<()> {
@@ -33,6 +36,7 @@ pub fn verify_locations(
         reginfo: isa.register_info(),
         encinfo: isa.encoding_info(),
         cfg,
+        domtree,
         liveness,
     };
     verifier.check_constraints(errors)?;
@@ -45,6 +49,7 @@ struct LocationVerifier<'a> {
     reginfo: isa::RegInfo,
     encinfo: isa::EncInfo,
     cfg: &'a ControlFlowGraph,
+    domtree: &'a DominatorTree,
     liveness: Option<&'a Liveness>,
 }
 
@@ -55,10 +60,14 @@ impl<'a> LocationVerifier<'a> {
         let mut divert = RegDiversions::new();
         let mut entry_divert = EntryRegDiversions::new();
 
-        for ebb in self.func.layout.ebbs() {
-            // Diversions are reset at the top of each EBB. No diversions can
-            // exist across control flow edges, unless recorded by the unique
-            // predecessor.
+        // A diversion can be carried from one block to its successor, if the successor has only one
+        // predecessor. Therefore a topological order with a preference bias with the dominator tree
+        // will help visit block in an order which should avoid reporting false positive.
+        let mut topo = TopoOrder::new();
+        topo.reset(self.func.layout.ebbs());
+        while let Some(ebb) = topo.next(&self.func.layout, self.domtree) {
+            // Diversions are reset at the top of each EBB. No diversions can exist across control
+            // flow edges, unless recorded by the unique predecessor.
             divert.clear();
             match entry_divert.get(ebb) {
                 Some(entry) => divert.extend(entry.iter()),
