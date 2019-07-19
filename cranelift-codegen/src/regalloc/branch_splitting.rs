@@ -1,7 +1,8 @@
 //! Split the outgoing edges of conditional branches that pass parameters.
 //!
-//! The `minimal` and `tree` register allocators require this.  They could integrate the splitting
-//! in their operation but it adds complexity to do so, esp once live ranges are involved.
+//! The `minimal` and `tree` register allocators require this. One of the reason for splitting edges
+//! is to be able to insert `copy` and `regmove` instructions between a conditional branch and the
+//! following terminator.
 
 use std::vec::Vec;
 
@@ -47,8 +48,8 @@ impl<'a> Context<'a> {
         // Any ebb order will do.
         self.topo.reset(self.cur.func.layout.ebbs());
         while let Some(ebb) = self.topo.next(&self.cur.func.layout, self.domtree) {
-            // Branches can only be at the last or second to last position in an
-            // extended basic block.
+            // Branches can only be at the last or second to last position in an extended basic
+            // block.
             self.cur.goto_last_inst(ebb);
             let terminator_inst = self
                 .cur
@@ -63,8 +64,8 @@ impl<'a> Context<'a> {
                         continue;
                     }
                 }
-                // If there is only a terminator instruction, then there is no
-                // need to create a new block.
+                // If there is only a terminator instruction, then there is no need to create a new
+                // block.
                 None => continue,
             };
             self.cur.goto_inst(terminator_inst);
@@ -189,8 +190,8 @@ impl<'a> Context<'a> {
             let new_ebb = self.cur.func.dfg.make_ebb();
             self.new_blocks = true;
 
-            // Split the current block before its terminator, and insert a new
-            // jump instruction to jump to it.
+            // Split the current block before its terminator, and insert a new jump instruction to
+            // jump to it.
             let jump = self.cur.ins().jump(new_ebb, &[]);
             self.cur.insert_ebb(new_ebb);
 
@@ -210,16 +211,14 @@ impl<'a> Context<'a> {
     }
 
     /// Returns whether we should introduce a new branch.
-    fn should_split_edge(&self, branch: Inst, target: Ebb) -> bool {
+    fn should_split_edge(&self, _branch: Inst, target: Ebb) -> bool {
         // We should split the edge if the target has any parameters.
         if self.cur.func.dfg.ebb_params(target).len() > 0 {
             return true;
         };
 
-        // Or, if the target is has more than one block reaching it. If a block
-        // has more than one predecessor, then the immediate dominator would not
-        // be the branch instruction which is jumping into this block.
-        if self.domtree.idom(target) != Some(branch) {
+        // Or, if the target is has more than one block reaching it.
+        if self.cfg.pred_iter(target).count() != 1 {
             return true;
         };
 
