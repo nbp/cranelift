@@ -162,19 +162,15 @@ impl<'a> Context<'a> {
 
     fn visit_terminator_branch(&mut self, inst: Inst) {
         let inst_data = &self.cur.func.dfg[inst];
-        match inst_data.opcode() {
-            Opcode::Jump | Opcode::Fallthrough => (),
-            // This opcode is ignored as they do not have any EBB parameters.
-            Opcode::IndirectJumpTableBr => return,
-            opcode => {
-                debug_assert!(
-                    !opcode.is_branch(),
-                    "Opcode {} is a non-handled branch.",
-                    opcode
-                );
-                return;
+        let opcode = inst_data.opcode();
+        if opcode != Opcode::Jump && opcode != Opcode::Fallthrough {
+            // This opcode is ignored as it does not have any EBB parameters.
+            if opcode != Opcode::IndirectJumpTableBr {
+                debug_assert!(!opcode.is_branch())
             }
-        };
+            return;
+        }
+
         let target = match inst_data {
             InstructionData::Jump { destination, .. } => destination,
             _ => panic!(
