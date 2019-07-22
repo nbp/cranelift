@@ -13,7 +13,7 @@ use crate::ir::{Ebb, StackSlot, Value, ValueLoc, ValueLocations};
 use crate::ir::{InstructionData, Opcode};
 use crate::isa::{RegInfo, RegUnit};
 use core::fmt;
-use cranelift_entity::SecondaryMap;
+use cranelift_entity::{SparseMap, SparseMapValue};
 use std::iter::FromIterator;
 
 /// A diversion of a value from its original location to a new register or stack location.
@@ -46,7 +46,11 @@ pub struct RegDiversions {
 }
 
 /// Keep track of diversions at the entry of EBB.
-pub type EntryRegDiversions = SecondaryMap<Ebb, RegDiversions>;
+pub struct EntryRegDiversionsValue {
+    key: Ebb,
+    divert: RegDiversions,
+}
+pub type EntryRegDiversions = SparseMap<Ebb, EntryRegDiversionsValue>;
 
 impl RegDiversions {
     /// Create a new empty diversion tracker.
@@ -192,6 +196,31 @@ impl<'a> FromIterator<(&'a Value, &'a Diversion)> for RegDiversions {
 impl Default for RegDiversions {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl EntryRegDiversionsValue {
+    /// Return the Diversion from an EntryRegDivertionValue extracted from an `EntryRegDiversions`.
+    pub fn divert(&self) -> &RegDiversions {
+        &self.divert
+    }
+}
+
+/// Implement `SparseMapValue`, as required to make use of a `SparseMap` for mapping the entry
+/// diversions for each EBB.
+impl SparseMapValue<Ebb> for EntryRegDiversionsValue {
+    fn key(&self) -> Ebb {
+        self.key
+    }
+}
+
+/// Short-hand to avoid naming this intermediate type.
+impl From<(Ebb, RegDiversions)> for EntryRegDiversionsValue {
+    fn from(from: (Ebb, RegDiversions)) -> Self {
+        Self {
+            key: from.0,
+            divert: from.1,
+        }
     }
 }
 

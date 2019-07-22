@@ -51,12 +51,12 @@ use crate::isa::{regs_overlap, RegClass, RegInfo, RegUnit};
 use crate::isa::{ConstraintKind, EncInfo, OperandConstraint, RecipeConstraints, TargetIsa};
 use crate::packed_option::PackedOption;
 use crate::regalloc::affinity::Affinity;
+use crate::regalloc::diversion::{EntryRegDiversions, RegDiversions};
 use crate::regalloc::live_value_tracker::{LiveValue, LiveValueTracker};
 use crate::regalloc::liveness::Liveness;
 use crate::regalloc::liverange::{LiveRange, LiveRangeContext};
 use crate::regalloc::register_set::RegisterSet;
 use crate::regalloc::solver::{Solver, SolverError};
-use crate::regalloc::{EntryRegDiversions, RegDiversions};
 use crate::timing;
 use core::mem;
 use log::debug;
@@ -194,12 +194,11 @@ impl<'a> Context<'a> {
             }
             tracker.drop_dead(inst);
 
-            // We are not able to insert any regmove for diversion or
-            // un-diversion after the first branch. Instead, we record the
-            // diversion to be restored at the entry of the next EBB, which
-            // should have a single predecessor.
+            // We are not able to insert any regmove for diversion or un-diversion after the first
+            // branch. Instead, we record the diversion to be restored at the entry of the next EBB,
+            // which should have a single predecessor.
             if opcode.is_branch() {
-                // The next instruction is necessarily a branch.
+                // The next instruction is necessarily an unconditional branch.
                 if let Some(branch) = self.cur.next_inst() {
                     debug!(
                         "Skip coloring {}\n    from {}\n    with diversions {}",
@@ -209,33 +208,38 @@ impl<'a> Context<'a> {
                     );
                     use crate::ir::instructions::BranchInfo::*;
                     let target = match self.cur.func.dfg.analyze_branch(branch) {
-                        NotABranch | Table(_, _) => {
-                            panic!("unexpected {} after a conditional branch", self.cur.display_inst(branch))
-                        }
+                        NotABranch | Table(_, _) => panic!(
+                            "unexpected instruction {} after a conditional branch",
+                            self.cur.display_inst(branch)
+                        ),
                         SingleDest(ebb, _) => ebb,
                     };
 
-                    // We have a single branch with a single target, and an EBB
-                    // which immediate dominator is the branch instruction. Thus
-                    // the target EBB has a single predecessor.
+                    // We have a single branch with a single target, and an EBB with a single
+                    // predecessor. Thus we can forward the divertion set to the next EBB.
                     if self.cfg.pred_iter(target).count() == 1 {
-                        // TODO: Assert that the entry is only set once.
                         // Transfer the diversion to the next EBB.
-                        self.entry_divert[target] = self.divert.iter().collect();
+                        debug_assert!(!self.entry_divert.contains_key(target));
+                        self.entry_divert
+                            .insert((target, self.divert.iter().collect()).into());
                         debug!(
                             "Set entry-diversion for {} to\n      {}",
                             target,
-                            self.entry_divert[target].display(&self.reginfo)
+                            self.divert.display(&self.reginfo)
                         );
-                        self.divert.clear();
+                    } else {
+                        debug_assert!(
+                            self.divert.is_empty(),
+                            "Divert set is non-empty after the terminator."
+                        );
                     }
-                    assert_eq!(
+                    debug_assert_eq!(
                         self.cur.next_inst(),
                         None,
                         "Unexpected instruction after a branch group."
                     );
                 } else {
-                    assert!(opcode.is_terminator());
+                    debug_assert!(opcode.is_terminator());
                 }
             }
         }
@@ -257,8 +261,8 @@ impl<'a> Context<'a> {
         // Copy the content of the registered diversions to be reused at the
         // entry of this basic block.
         self.divert.clear();
-        match self.entry_divert.get(ebb) {
-            Some(entry_divert) => self.divert.extend(entry_divert.iter()),
+        match self.entry_divert.remove(ebb) {
+            Some(entry_divert) => self.divert.extend(entry_divert.divert().iter()),
             None => (),
         };
         debug!(

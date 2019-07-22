@@ -70,7 +70,7 @@ impl<'a> LocationVerifier<'a> {
             // flow edges, unless recorded by the unique predecessor.
             divert.clear();
             match entry_divert.get(ebb) {
-                Some(entry) => divert.extend(entry.iter()),
+                Some(entry) => divert.extend(entry.divert().iter()),
                 None => (),
             };
 
@@ -350,7 +350,8 @@ impl<'a> LocationVerifier<'a> {
             SingleDest(ebb, _) => {
                 let unique_predecessor = self.cfg.pred_iter(ebb).count() == 1;
                 if is_after_branch && unique_predecessor {
-                    entry_divert[ebb] = divert.iter().collect();
+                    debug_assert!(!entry_divert.contains_key(ebb));
+                    entry_divert.insert((ebb, divert.iter().collect()).into());
                 } else {
                     for (&value, d) in divert.iter() {
                         let lr = &liveness[value];
