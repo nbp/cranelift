@@ -43,7 +43,7 @@ pretty_env_logger = "0.3.0"
 file-per-thread-logger = "0.1.2"
 
 [features]
-default = ["disas", "wasm"]
+default = ["disas", "wasm", "basic-blocks"]
 disas = ["capstone"]
 wasm = ["wabt", "cranelift-wasm"]
 basic-blocks = ["cranelift-codegen/basic-blocks", "cranelift-frontend/basic-blocks", "cranelift-wasm/basic-blocks"]
