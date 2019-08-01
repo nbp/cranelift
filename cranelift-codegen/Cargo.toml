@@ -30,7 +30,7 @@ serde = { version = "1.0.94", features = ["derive"], optional = true }
 cranelift-codegen-meta = { path = "meta", version = "0.36.0", default-features = false }
 
 [features]
-default = ["std", "x86", "arm32", "arm64", "riscv"]
+default = ["std", "x86", "arm32", "arm64", "riscv", "basic-blocks"]
 
 # The "std" feature enables use of libstd. The "core" feature enables use
 # of some minimal std-like replacement libraries. At least one of these two
