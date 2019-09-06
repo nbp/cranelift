@@ -325,14 +325,14 @@ fn valid_scale(format: &InstructionFormat) -> InstructionPredicate {
         })
 }
 
-pub fn define<'shared>(
+pub(crate) fn define<'shared>(
     shared_defs: &'shared SharedDefinitions,
     settings: &'shared SettingGroup,
     regs: &'shared IsaRegs,
 ) -> RecipeGroup<'shared> {
     // The set of floating point condition codes that are directly supported.
     // Other condition codes need to be reversed or expressed as two tests.
-    let floatcc = shared_defs.operand_kinds.by_name("floatcc");
+    let floatcc = &shared_defs.imm.floatcc;
     let supported_floatccs: Vec<Literal> = ["ord", "uno", "one", "ueq", "gt", "ge", "ult", "ule"]
         .iter()
         .map(|name| Literal::enumerator_for(floatcc, name))
@@ -2524,6 +2524,47 @@ pub fn define<'shared>(
                 r#"
                     {{PUT_OP}}(bits, rex2(in_reg0, out_reg0), sink);
                     modrm_rr(in_reg0, out_reg0, sink);
+                "#,
+            ),
+    );
+
+    // Adding with carry
+
+    // XX /r, MR form. Add two GPR registers and get carry flag.
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("rin", f_ternary, 1)
+            .operands_in(vec![
+                OperandConstraint::RegClass(gpr),
+                OperandConstraint::RegClass(gpr),
+                OperandConstraint::FixedReg(reg_rflags),
+            ])
+            .operands_out(vec![0])
+            .clobbers_flags(true)
+            .emit(
+                r#"
+                    {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
+                    modrm_rr(in_reg0, in_reg1, sink);
+                "#,
+            ),
+    );
+
+    // XX /r, MR form. Add two GPR registers with carry flag.
+    recipes.add_template_recipe(
+        EncodingRecipeBuilder::new("rio", f_ternary, 1)
+            .operands_in(vec![
+                OperandConstraint::RegClass(gpr),
+                OperandConstraint::RegClass(gpr),
+                OperandConstraint::FixedReg(reg_rflags),
+            ])
+            .operands_out(vec![
+                OperandConstraint::TiedInput(0),
+                OperandConstraint::FixedReg(reg_rflags),
+            ])
+            .clobbers_flags(true)
+            .emit(
+                r#"
+                    {{PUT_OP}}(bits, rex2(in_reg0, in_reg1), sink);
+                    modrm_rr(in_reg0, in_reg1, sink);
                 "#,
             ),
     );

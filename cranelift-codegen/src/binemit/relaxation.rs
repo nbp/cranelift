@@ -129,8 +129,7 @@ pub fn relax_branches(
 
     for (jt, jt_data) in func.jump_tables.iter() {
         func.jt_offsets[jt] = offset;
-        // TODO: this should be computed based on the min size needed to hold
-        //        the furthest branch.
+        // TODO: this should be computed based on the min size needed to hold the furthest branch.
         offset += jt_data.len() as u32 * 4;
     }
 
@@ -168,6 +167,14 @@ fn try_fold_redundant_jump(
             return false; // The instruction was either multi-target or not a branch.
         }
     };
+
+    // For the moment, only attempt to fold a branch to an ebb that is parameterless.
+    // These blocks are mainly produced by critical edge splitting.
+    //
+    // TODO: Allow folding blocks that define SSA values and function as phi nodes.
+    if func.dfg.num_ebb_params(first_dest) != 0 {
+        return false;
+    }
 
     // Look at the first instruction of the first branch's destination.
     // If it is an unconditional branch, maybe the second jump can be bypassed.

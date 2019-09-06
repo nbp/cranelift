@@ -279,7 +279,8 @@ impl PerCpuModeEncodings {
         }
     }
 
-    /// Add the same encoding to both X86_32 and X86_64; assumes configuration (e.g. REX, operand binding) has already happened
+    /// Add the same encoding to both X86_32 and X86_64; assumes configuration (e.g. REX, operand
+    /// binding) has already happened.
     fn enc_32_64_maybe_isap(
         &mut self,
         inst: impl Clone + Into<InstSpec>,
@@ -317,7 +318,7 @@ impl PerCpuModeEncodings {
 
 // Definitions.
 
-pub fn define(
+pub(crate) fn define(
     shared_defs: &SharedDefinitions,
     settings: &SettingGroup,
     x86: &InstructionGroup,
@@ -372,6 +373,9 @@ pub fn define(
     let fsub = shared.by_name("fsub");
     let func_addr = shared.by_name("func_addr");
     let iadd = shared.by_name("iadd");
+    let iadd_cout = shared.by_name("iadd_cout");
+    let iadd_cin = shared.by_name("iadd_cin");
+    let iadd_carry = shared.by_name("iadd_carry");
     let iadd_imm = shared.by_name("iadd_imm");
     let icmp = shared.by_name("icmp");
     let icmp_imm = shared.by_name("icmp_imm");
@@ -393,6 +397,9 @@ pub fn define(
     let istore8 = shared.by_name("istore8");
     let istore8_complex = shared.by_name("istore8_complex");
     let isub = shared.by_name("isub");
+    let isub_bout = shared.by_name("isub_bout");
+    let isub_bin = shared.by_name("isub_bin");
+    let isub_borrow = shared.by_name("isub_borrow");
     let jump = shared.by_name("jump");
     let jump_table_base = shared.by_name("jump_table_base");
     let jump_table_entry = shared.by_name("jump_table_entry");
@@ -556,6 +563,8 @@ pub fn define(
     let rec_rfurm = r.template("rfurm");
     let rec_rmov = r.template("rmov");
     let rec_rr = r.template("rr");
+    let rec_rin = r.template("rin");
+    let rec_rio = r.template("rio");
     let rec_rrx = r.template("rrx");
     let rec_safepoint = r.recipe("safepoint");
     let rec_setf_abcd = r.template("setf_abcd");
@@ -611,7 +620,15 @@ pub fn define(
     let mut e = PerCpuModeEncodings::new();
 
     e.enc_i32_i64(iadd, rec_rr.opcodes(vec![0x01]));
+    e.enc_i32_i64(iadd_cout, rec_rr.opcodes(vec![0x01]));
+    e.enc_i32_i64(iadd_cin, rec_rin.opcodes(vec![0x11]));
+    e.enc_i32_i64(iadd_carry, rec_rio.opcodes(vec![0x11]));
+
     e.enc_i32_i64(isub, rec_rr.opcodes(vec![0x29]));
+    e.enc_i32_i64(isub_bout, rec_rr.opcodes(vec![0x29]));
+    e.enc_i32_i64(isub_bin, rec_rin.opcodes(vec![0x19]));
+    e.enc_i32_i64(isub_borrow, rec_rio.opcodes(vec![0x19]));
+
     e.enc_i32_i64(band, rec_rr.opcodes(vec![0x21]));
     e.enc_i32_i64(bor, rec_rr.opcodes(vec![0x09]));
     e.enc_i32_i64(bxor, rec_rr.opcodes(vec![0x31]));

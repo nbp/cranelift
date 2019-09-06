@@ -8,13 +8,14 @@ use crate::cdsl::operands::{create_operand as operand, create_operand_doc as ope
 use crate::cdsl::type_inference::Constraint::WiderOrEq;
 use crate::cdsl::types::{LaneType, ValueType};
 use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
-use crate::shared::{types, OperandKinds};
+use crate::shared::types;
+use crate::shared::{entities::EntityRefs, immediates::Immediates};
 
-pub fn define(
+pub(crate) fn define(
     all_instructions: &mut AllInstructions,
     format_registry: &FormatRegistry,
-    immediates: &OperandKinds,
-    entities: &OperandKinds,
+    imm: &Immediates,
+    entities: &EntityRefs,
 ) -> InstructionGroup {
     let mut ig = InstructionGroupBuilder::new(
         "base",
@@ -24,30 +25,6 @@ pub fn define(
     );
 
     // Operand kind shorthands.
-    let intcc = immediates.by_name("intcc");
-    let floatcc = immediates.by_name("floatcc");
-    let trapcode = immediates.by_name("trapcode");
-    let uimm8 = immediates.by_name("uimm8");
-    let uimm32 = immediates.by_name("uimm32");
-    let imm64 = immediates.by_name("imm64");
-    let uimm128 = immediates.by_name("uimm128");
-    let offset32 = immediates.by_name("offset32");
-    let memflags = immediates.by_name("memflags");
-    let ieee32 = immediates.by_name("ieee32");
-    let ieee64 = immediates.by_name("ieee64");
-    let boolean = immediates.by_name("boolean");
-    let regunit = immediates.by_name("regunit");
-
-    let ebb = entities.by_name("ebb");
-    let jump_table = entities.by_name("jump_table");
-    let variable_args = entities.by_name("variable_args");
-    let func_ref = entities.by_name("func_ref");
-    let sig_ref = entities.by_name("sig_ref");
-    let stack_slot = entities.by_name("stack_slot");
-    let global_value = entities.by_name("global_value");
-    let heap = entities.by_name("heap");
-    let table = entities.by_name("table");
-
     let iflags: &TypeVar = &ValueType::Special(types::Flag::IFlags.into()).into();
     let fflags: &TypeVar = &ValueType::Special(types::Flag::FFlags.into()).into();
 
@@ -142,11 +119,11 @@ pub fn define(
 
     let addr = &operand("addr", iAddr);
     let c = &operand_doc("c", Testable, "Controlling value to test");
-    let Cond = &operand("Cond", intcc);
+    let Cond = &operand("Cond", &imm.intcc);
     let x = &operand("x", iB);
     let y = &operand("y", iB);
-    let EBB = &operand_doc("EBB", ebb, "Destination extended basic block");
-    let args = &operand_doc("args", variable_args, "EBB arguments");
+    let EBB = &operand_doc("EBB", &entities.ebb, "Destination extended basic block");
+    let args = &operand_doc("args", &entities.varargs, "EBB arguments");
 
     ig.push(
         Inst::new(
@@ -253,7 +230,7 @@ pub fn define(
         .is_branch(true),
     );
 
-    let Cond = &operand("Cond", floatcc);
+    let Cond = &operand("Cond", &imm.floatcc);
     let f = &operand("f", fflags);
 
     ig.push(
@@ -270,7 +247,7 @@ pub fn define(
     // The index into the br_table can be any type; legalizer will convert it to the right type.
     let x = &operand_doc("x", iB, "index into jump table");
     let entry = &operand_doc("entry", iAddr, "entry of jump table");
-    let JT = &operand("JT", jump_table);
+    let JT = &operand("JT", &entities.jump_table);
 
     ig.push(
         Inst::new(
@@ -300,7 +277,7 @@ pub fn define(
     // These are the instructions which br_table legalizes to: they perform address computations,
     // using pointer-sized integers, so their type variables are more constrained.
     let x = &operand_doc("x", iAddr, "index into jump table");
-    let Size = &operand_doc("Size", uimm8, "Size in bytes");
+    let Size = &operand_doc("Size", &imm.uimm8, "Size in bytes");
 
     ig.push(
         Inst::new(
@@ -365,7 +342,7 @@ pub fn define(
         .can_store(true),
     );
 
-    let code = &operand("code", trapcode);
+    let code = &operand("code", &imm.trapcode);
 
     ig.push(
         Inst::new(
@@ -418,7 +395,7 @@ pub fn define(
         .can_trap(true),
     );
 
-    let Cond = &operand("Cond", intcc);
+    let Cond = &operand("Cond", &imm.intcc);
     let f = &operand("f", iflags);
 
     ig.push(
@@ -432,7 +409,7 @@ pub fn define(
         .can_trap(true),
     );
 
-    let Cond = &operand("Cond", floatcc);
+    let Cond = &operand("Cond", &imm.floatcc);
     let f = &operand("f", fflags);
 
     ig.push(
@@ -446,7 +423,7 @@ pub fn define(
         .can_trap(true),
     );
 
-    let rvals = &operand_doc("rvals", variable_args, "return values");
+    let rvals = &operand_doc("rvals", &entities.varargs, "return values");
 
     ig.push(
         Inst::new(
@@ -480,8 +457,12 @@ pub fn define(
         .is_terminator(true),
     );
 
-    let FN = &operand_doc("FN", func_ref, "function to call, declared by `function`");
-    let args = &operand_doc("args", variable_args, "call arguments");
+    let FN = &operand_doc(
+        "FN",
+        &entities.func_ref,
+        "function to call, declared by `function`",
+    );
+    let args = &operand_doc("args", &entities.varargs, "call arguments");
 
     ig.push(
         Inst::new(
@@ -498,7 +479,7 @@ pub fn define(
         .is_call(true),
     );
 
-    let SIG = &operand_doc("SIG", sig_ref, "function signature");
+    let SIG = &operand_doc("SIG", &entities.sig_ref, "function signature");
     let callee = &operand_doc("callee", iAddr, "address of function to call");
 
     ig.push(
@@ -538,13 +519,13 @@ pub fn define(
         .operands_out(vec![addr]),
     );
 
-    let SS = &operand("SS", stack_slot);
-    let Offset = &operand_doc("Offset", offset32, "Byte offset from base address");
+    let SS = &operand("SS", &entities.stack_slot);
+    let Offset = &operand_doc("Offset", &imm.offset32, "Byte offset from base address");
     let x = &operand_doc("x", Mem, "Value to be stored");
     let a = &operand_doc("a", Mem, "Value loaded");
     let p = &operand("p", iAddr);
-    let MemFlags = &operand("MemFlags", memflags);
-    let args = &operand_doc("args", variable_args, "Address arguments");
+    let MemFlags = &operand("MemFlags", &imm.memflags);
+    let args = &operand_doc("args", &entities.varargs, "Address arguments");
 
     ig.push(
         Inst::new(
@@ -876,7 +857,7 @@ pub fn define(
 
     let x = &operand_doc("x", Mem, "Value to be stored");
     let a = &operand_doc("a", Mem, "Value loaded");
-    let Offset = &operand_doc("Offset", offset32, "In-bounds offset into stack slot");
+    let Offset = &operand_doc("Offset", &imm.offset32, "In-bounds offset into stack slot");
 
     ig.push(
         Inst::new(
@@ -930,7 +911,7 @@ pub fn define(
         .operands_out(vec![addr]),
     );
 
-    let GV = &operand("GV", global_value);
+    let GV = &operand("GV", &entities.global_value);
 
     ig.push(
         Inst::new(
@@ -960,9 +941,9 @@ pub fn define(
         TypeSetBuilder::new().ints(32..64).build(),
     );
 
-    let H = &operand("H", heap);
+    let H = &operand("H", &entities.heap);
     let p = &operand("p", HeapOffset);
-    let Size = &operand_doc("Size", uimm32, "Size in bytes");
+    let Size = &operand_doc("Size", &imm.uimm32, "Size in bytes");
 
     ig.push(
         Inst::new(
@@ -988,9 +969,9 @@ pub fn define(
         "An unsigned table offset",
         TypeSetBuilder::new().ints(32..64).build(),
     );
-    let T = &operand("T", table);
+    let T = &operand("T", &entities.table);
     let p = &operand("p", TableOffset);
-    let Offset = &operand_doc("Offset", offset32, "Byte offset from element address");
+    let Offset = &operand_doc("Offset", &imm.offset32, "Byte offset from element address");
 
     ig.push(
         Inst::new(
@@ -1013,7 +994,7 @@ pub fn define(
         .operands_out(vec![addr]),
     );
 
-    let N = &operand("N", imm64);
+    let N = &operand("N", &imm.imm64);
     let a = &operand_doc("a", Int, "A constant integer scalar or vector value");
 
     ig.push(
@@ -1030,7 +1011,7 @@ pub fn define(
         .operands_out(vec![a]),
     );
 
-    let N = &operand("N", ieee32);
+    let N = &operand("N", &imm.ieee32);
     let a = &operand_doc("a", f32_, "A constant f32 scalar value");
 
     ig.push(
@@ -1046,7 +1027,7 @@ pub fn define(
         .operands_out(vec![a]),
     );
 
-    let N = &operand("N", ieee64);
+    let N = &operand("N", &imm.ieee64);
     let a = &operand_doc("a", f64_, "A constant f64 scalar value");
 
     ig.push(
@@ -1062,7 +1043,7 @@ pub fn define(
         .operands_out(vec![a]),
     );
 
-    let N = &operand("N", boolean);
+    let N = &operand("N", &imm.boolean);
     let a = &operand_doc("a", Bool, "A constant boolean scalar or vector value");
 
     ig.push(
@@ -1079,7 +1060,11 @@ pub fn define(
         .operands_out(vec![a]),
     );
 
-    let N = &operand_doc("N", uimm128, "The 16 immediate bytes of a 128-bit vector");
+    let N = &operand_doc(
+        "N",
+        &imm.uimm128,
+        "The 16 immediate bytes of a 128-bit vector",
+    );
     let a = &operand_doc("a", TxN, "A constant vector value");
 
     ig.push(
@@ -1137,7 +1122,7 @@ pub fn define(
         .operands_out(vec![a]),
     );
 
-    let cc = &operand_doc("cc", intcc, "Controlling condition code");
+    let cc = &operand_doc("cc", &imm.intcc, "Controlling condition code");
     let flags = &operand_doc("flags", iflags, "The machine's flag register");
 
     ig.push(
@@ -1217,8 +1202,8 @@ pub fn define(
         .can_load(true),
     );
 
-    let src = &operand("src", regunit);
-    let dst = &operand("dst", regunit);
+    let src = &operand("src", &imm.regunit);
+    let dst = &operand("dst", &imm.regunit);
 
     ig.push(
         Inst::new(
@@ -1302,7 +1287,7 @@ pub fn define(
         .other_side_effects(true),
     );
 
-    let Offset = &operand_doc("Offset", imm64, "Offset from current stack pointer");
+    let Offset = &operand_doc("Offset", &imm.imm64, "Offset from current stack pointer");
 
     ig.push(
         Inst::new(
@@ -1319,7 +1304,7 @@ pub fn define(
         .other_side_effects(true),
     );
 
-    let Offset = &operand_doc("Offset", imm64, "Offset from current stack pointer");
+    let Offset = &operand_doc("Offset", &imm.imm64, "Offset from current stack pointer");
 
     ig.push(
         Inst::new(
@@ -1391,7 +1376,7 @@ pub fn define(
 
     let N = &operand_doc(
         "args",
-        variable_args,
+        &entities.varargs,
         "Variable number of args for Stackmap",
     );
 
@@ -1498,7 +1483,7 @@ pub fn define(
 
     let x = &operand_doc("x", TxN, "SIMD vector to modify");
     let y = &operand_doc("y", &TxN.lane_of(), "New lane value");
-    let Idx = &operand_doc("Idx", uimm8, "Lane index");
+    let Idx = &operand_doc("Idx", &imm.uimm8, "Lane index");
 
     ig.push(
         Inst::new(
@@ -1532,7 +1517,7 @@ pub fn define(
     );
 
     let a = &operand("a", &Int.as_bool());
-    let Cond = &operand("Cond", intcc);
+    let Cond = &operand("Cond", &imm.intcc);
     let x = &operand("x", Int);
     let y = &operand("y", Int);
 
@@ -1566,7 +1551,7 @@ pub fn define(
 
     let a = &operand("a", b1);
     let x = &operand("x", iB);
-    let Y = &operand("Y", imm64);
+    let Y = &operand("Y", &imm.imm64);
 
     ig.push(
         Inst::new(
@@ -1757,7 +1742,7 @@ pub fn define(
 
     let a = &operand("a", iB);
     let x = &operand("x", iB);
-    let Y = &operand("Y", imm64);
+    let Y = &operand("Y", &imm.imm64);
 
     ig.push(
         Inst::new(
@@ -1864,10 +1849,10 @@ pub fn define(
     let a = &operand("a", iB);
     let x = &operand("x", iB);
     let y = &operand("y", iB);
-    let c_in = &operand_doc("c_in", b1, "Input carry flag");
-    let c_out = &operand_doc("c_out", b1, "Output carry flag");
-    let b_in = &operand_doc("b_in", b1, "Input borrow flag");
-    let b_out = &operand_doc("b_out", b1, "Output borrow flag");
+    let c_in = &operand_doc("c_in", iflags, "Input carry flag");
+    let c_out = &operand_doc("c_out", iflags, "Output carry flag");
+    let b_in = &operand_doc("b_in", iflags, "Input borrow flag");
+    let b_out = &operand_doc("b_out", iflags, "Output borrow flag");
 
     ig.push(
         Inst::new(
@@ -2092,7 +2077,7 @@ pub fn define(
     );
 
     let x = &operand("x", iB);
-    let Y = &operand("Y", imm64);
+    let Y = &operand("Y", &imm.imm64);
     let a = &operand("a", iB);
 
     ig.push(
@@ -2145,7 +2130,7 @@ pub fn define(
 
     let x = &operand_doc("x", Int, "Scalar or vector value to shift");
     let y = &operand_doc("y", iB, "Number of bits to shift");
-    let Y = &operand("Y", imm64);
+    let Y = &operand("Y", &imm.imm64);
     let a = &operand("a", Int);
 
     ig.push(
@@ -2375,7 +2360,7 @@ pub fn define(
             .simd_lanes(Interval::All)
             .build(),
     );
-    let Cond = &operand("Cond", floatcc);
+    let Cond = &operand("Cond", &imm.floatcc);
     let x = &operand("x", Float);
     let y = &operand("y", Float);
     let a = &operand("a", &Float.as_bool());
@@ -2687,7 +2672,7 @@ pub fn define(
         .operands_out(vec![a]),
     );
 
-    let Cond = &operand("Cond", intcc);
+    let Cond = &operand("Cond", &imm.intcc);
     let f = &operand("f", iflags);
     let a = &operand("a", b1);
 
@@ -2705,7 +2690,7 @@ pub fn define(
         .operands_out(vec![a]),
     );
 
-    let Cond = &operand("Cond", floatcc);
+    let Cond = &operand("Cond", &imm.floatcc);
     let f = &operand("f", fflags);
 
     ig.push(
